@@ -74,15 +74,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Namaste! 🙏 Welcome to *DukaanMitra AI*.\n\n"
         "I build and publish modern digital storefronts for your business!\n\n"
         "✨ *How would you like to create your website?*\n\n"
-        "1️⃣ *Step-by-step Guide*: Send /create and I will ask you 11 quick questions.\n"
+        "1️⃣ *Step-by-step Guide*: Tap the button below or send `create` to answer quick questions.\n"
         "2️⃣ *Instant Voice/Text*: Send a voice note or message like:\n"
         "`My shop is Paradise. Chicken Biryani 250, Chicken 65 180`\n\n"
         "⚡ *Commands*:\n"
-        "• `/create` - Start step-by-step questionnaire\n"
+        "• `/create` or `create` - Start step-by-step questionnaire\n"
         "• `/undo` - Revert last change\n"
         "• `show my business` - View your live website"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 Start Questionnaire (/create)", callback_data="wizard:start")]
+    ])
+    await update.message.reply_text(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
 
 
 # =========================================================================
@@ -90,9 +93,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================================================================
 
 async def start_create_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Entry point for /create step-by-step questionnaire."""
+    """Entry point for /create step-by-step questionnaire (command, text, or button)."""
     context.user_data["biz"] = {}
-    await update.message.reply_text(
+    msg_target = update.message
+    if update.callback_query:
+        await update.callback_query.answer()
+        msg_target = update.callback_query.message
+
+    await msg_target.reply_text(
         "🚀 *Let's build your website step-by-step!*\n\n"
         "1️⃣ *What is your Business Name?*\n"
         "(e.g. `Apex Auto Care` or `Paradise`)",
@@ -619,16 +627,22 @@ async def process_utterance(
     logger.info(f"Incoming message from user {user_id}: {text}")
 
     clean_lower = text.strip().lower()
+    if clean_lower in ["create", "/create", "create website", "create store", "create business", "start create"]:
+        return await start_create_wizard(update, context)
+
     if clean_lower in ["hi", "hello", "hey", "start", "help", "namaste"]:
         welcome_text = (
             "Namaste! 🙏 Welcome to *DukaanMitra AI*.\n\n"
             "✨ *Two ways to create your website*:\n\n"
-            "1️⃣ Send /create for an interactive step-by-step questionnaire.\n"
+            "1️⃣ Tap the button below or send `create` for an interactive questionnaire.\n"
             "2️⃣ Or send your shop name & items in one message:\n"
             "`Paradise. Chicken Biryani 250, Chicken 65 180`\n\n"
             "Try either one right now! 🚀"
         )
-        await update.message.reply_text(welcome_text, parse_mode="Markdown")
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚀 Start Questionnaire (/create)", callback_data="wizard:start")]
+        ])
+        await update.message.reply_text(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
         return
 
     session = SessionLocal()
@@ -745,9 +759,15 @@ def run_bot():
 
     app = ApplicationBuilder().token(token).build()
 
-    # Step-by-step Conversation Wizard
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("create", start_create_wizard)],
+        entry_points=[
+            CommandHandler("create", start_create_wizard),
+            MessageHandler(
+                filters.Regex(r"^(?i)\s*(/?create|start\s*create|create\s*(a\s*)?(website|store|shop|business)?|new\s*(website|store|shop))\s*$"),
+                start_create_wizard,
+            ),
+            CallbackQueryHandler(start_create_wizard, pattern=r"^wizard:start$"),
+        ],
         states={
             ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_name_handler)],
             ASK_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_type_handler)],
