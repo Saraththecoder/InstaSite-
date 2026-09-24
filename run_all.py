@@ -5,10 +5,19 @@ import threading
 import time
 
 def start_bot():
-    """Runs the Telegram bot polling process."""
-    print("Starting DukaanMitra Telegram Bot...")
-    result = subprocess.run([sys.executable, "-m", "app.bot"])
-    print(f"DukaanMitra Telegram Bot process exited with return code: {result.returncode}")
+    """Runs the Telegram bot polling process with auto-restart and diagnostics."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token:
+        print("=" * 60, file=sys.stderr)
+        print("❌ CRITICAL: TELEGRAM_BOT_TOKEN is NOT set in Environment!", file=sys.stderr)
+        print("Please add TELEGRAM_BOT_TOKEN in Render Dashboard -> Environment", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+
+    while True:
+        print("Starting DukaanMitra Telegram Bot...")
+        result = subprocess.run([sys.executable, "-m", "app.bot"])
+        print(f"⚠️ Telegram Bot exited with return code: {result.returncode}. Retrying in 5 seconds...", file=sys.stderr)
+        time.sleep(5)
 
 def start_server():
     """Runs the FastAPI uvicorn web server."""
