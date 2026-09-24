@@ -190,7 +190,7 @@ def route_intent(text: str) -> IntentResult:
 
             def _call_gemini_intent():
                 return client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-2.5-flash",
                     contents=f"{INTENT_SYSTEM_PROMPT}\n\nUser Utterance: {text}",
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",

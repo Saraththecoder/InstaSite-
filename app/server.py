@@ -4,6 +4,10 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
+from app.config import BASE_DIR
+from app.db.database import SessionLocal, init_db
+from app.db.models import Business
+
 # Ensure static directories exist
 STATIC_DIR = BASE_DIR / "static"
 STATIC_STORE_DIR = STATIC_DIR / "store"

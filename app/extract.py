@@ -206,7 +206,7 @@ def extract_business_from_transcript(transcript: str) -> ExtractedBusiness:
             
             def _call_gemini():
                 return client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="gemini-2.5-flash",
                     contents=f"{SYSTEM_PROMPT}\n\nTranscript: {transcript}",
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
