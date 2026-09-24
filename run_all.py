@@ -7,7 +7,8 @@ import time
 def start_bot():
     """Runs the Telegram bot polling process."""
     print("Starting DukaanMitra Telegram Bot...")
-    subprocess.run([sys.executable, "-m", "app.bot"])
+    result = subprocess.run([sys.executable, "-m", "app.bot"])
+    print(f"DukaanMitra Telegram Bot process exited with return code: {result.returncode}")
 
 def start_server():
     """Runs the FastAPI uvicorn web server."""

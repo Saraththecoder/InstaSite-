@@ -2,10 +2,7 @@ import os
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
-from app.config import BASE_DIR
-from app.db.database import init_db, SessionLocal
-from app.db.models import Business
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 # Ensure static directories exist
 STATIC_DIR = BASE_DIR / "static"
@@ -27,12 +24,17 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/store", StaticFiles(directory=STATIC_STORE_DIR, html=True), name="store")
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "ok", "service": "DukaanMitra AI"}
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
+
+
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home():
     session = SessionLocal()
     try:
