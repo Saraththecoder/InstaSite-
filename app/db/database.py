@@ -22,6 +22,8 @@ def init_db():
                 ("trust_badges", "VARCHAR(1000)"),
                 ("whatsapp", "VARCHAR(50)"),
                 ("cta_text", "VARCHAR(100)"),
+                ("logo_url", "VARCHAR(500)"),
+                ("hero_image_url", "VARCHAR(500)"),
             ]:
                 try:
                     conn.execute(text(f"ALTER TABLE businesses ADD COLUMN {col} {col_type};"))

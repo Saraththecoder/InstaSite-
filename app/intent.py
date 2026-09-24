@@ -219,7 +219,7 @@ def handle_intent_confidence_gate(result: IntentResult) -> tuple[bool, str]:
     if result.confidence < 0.7:
         if result.shop_name and result.shop_name.strip():
             return False, (
-                f"🏪 Got your shop name: *{result.shop_name}*!\n\n"
+                f"I didn't quite catch that. Got your shop name: *{result.shop_name}*!\n\n"
                 f"Now send your dishes with prices in one message or voice note. For example:\n"
                 f"`{result.shop_name}. Chicken Biryani 250, Chicken 65 180`"
             )

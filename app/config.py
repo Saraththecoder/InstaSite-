@@ -13,7 +13,17 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'dukaan_mitra.db'}")
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "small")
 STORE_BASE_URL = os.getenv("STORE_BASE_URL", "http://localhost:8000")
+VERCEL_TOKEN = os.getenv("VERCEL_TOKEN", "")
 PORT = int(os.getenv("PORT", "8000"))
+
+def require_vercel_token() -> str:
+    """Fail-fast check for Vercel Token."""
+    if not VERCEL_TOKEN:
+        raise ValueError(
+            "VERCEL_TOKEN is not set in .env file. "
+            "Please paste your Vercel Token in .env as VERCEL_TOKEN=..."
+        )
+    return VERCEL_TOKEN
 
 def require_gemini_key() -> str:
     """Fail-fast check for Gemini API key."""

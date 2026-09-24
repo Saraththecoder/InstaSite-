@@ -51,7 +51,8 @@ def match_product(session: Session, business_id: int, query_name: str) -> Option
 def propose_change(
     session: Session,
     owner_telegram_id: int,
-    intent_result: IntentResult
+    intent_result: IntentResult,
+    image_url: Optional[str] = None,
 ) -> Tuple[Optional[Change], str]:
     """
     Creates a pending change record in `changes` with confirmed=False.
@@ -101,12 +102,16 @@ def propose_change(
         price = intent_result.new_price or 0.0
         price_str = f"₹{int(price)}" if float(price).is_integer() else f"₹{price:.2f}"
 
+        new_val = {"name": prod_name, "price": price}
+        if image_url:
+            new_val["image_url"] = image_url
+
         change = Change(
             action=ChangeAction.ADD_PRODUCT,
             business_id=biz.business_id,
             product_id=None,
             old_value=None,
-            new_value={"name": prod_name, "price": price},
+            new_value=new_val,
             confirmed=False,
             reversed=False,
         )
@@ -114,7 +119,8 @@ def propose_change(
         session.commit()
         session.refresh(change)
 
-        summary = f"Add *{prod_name}* at {price_str} to your menu. Publish?"
+        photo_label = " (with photo)" if image_url else ""
+        summary = f"Add *{prod_name}*{photo_label} at {price_str} to your menu. Publish?"
         return change, summary
 
     elif action_type == IntentType.UPDATE_PRICE:
@@ -175,6 +181,27 @@ def confirm_change(session: Session, change_id: int) -> Tuple[bool, str, Optiona
         if existing_slug and existing_slug.owner_telegram_id != owner_id:
             slug = f"{slug}-{owner_id}"
 
+        logo_url = data.get("logo_url")
+        hero_image_url = data.get("hero_image_url")
+
+        # Auto-generate hero image if not already generated
+        if not hero_image_url:
+            try:
+                from app.hero_generator import generate_hero_banner
+                from app.config import BASE_DIR
+                local_logo = str(BASE_DIR / logo_url.lstrip("/")) if logo_url else None
+                hero_path = BASE_DIR / "static" / "images" / "heroes" / f"{slug}_hero.jpg"
+                generate_hero_banner(
+                    business_name=biz_name,
+                    category=data.get("category", "Store"),
+                    tagline=data.get("tagline"),
+                    logo_path=local_logo,
+                    output_path=hero_path,
+                )
+                hero_image_url = f"/static/images/heroes/{slug}_hero.jpg"
+            except Exception as e:
+                logger.warning(f"Hero generation fallback: {e}")
+
         # Check if owner already has a business with this slug
         business = session.query(Business).filter(Business.owner_telegram_id == owner_id, Business.slug == slug).first()
         if not business:
@@ -190,6 +217,8 @@ def confirm_change(session: Session, change_id: int) -> Tuple[bool, str, Optiona
                 address=data.get("address"),
                 opening_hours=data.get("opening_hours"),
                 cta_text=data.get("cta_text", "Book Now"),
+                logo_url=logo_url,
+                hero_image_url=hero_image_url,
                 slug=slug,
             )
             session.add(business)
@@ -203,16 +232,20 @@ def confirm_change(session: Session, change_id: int) -> Tuple[bool, str, Optiona
             if data.get("address"): business.address = data.get("address")
             if data.get("opening_hours"): business.opening_hours = data.get("opening_hours")
             if data.get("cta_text"): business.cta_text = data.get("cta_text")
+            if logo_url: business.logo_url = logo_url
+            if hero_image_url: business.hero_image_url = hero_image_url
 
         change.business_id = business.business_id
 
         # Insert products
         for p in data.get("products", []):
+            img = p.get("image_url")
             product = Product(
                 business_id=business.business_id,
                 name=p["name"],
                 price=float(p["price"]),
-                is_placeholder=True,
+                image_url=img,
+                is_placeholder=False if img else True,
             )
             session.add(product)
 
@@ -225,11 +258,13 @@ def confirm_change(session: Session, change_id: int) -> Tuple[bool, str, Optiona
 
     elif change.action == ChangeAction.ADD_PRODUCT:
         data = change.new_value
+        img = data.get("image_url")
         product = Product(
             business_id=change.business_id,
             name=data["name"],
             price=float(data["price"]),
-            is_placeholder=True,
+            image_url=img,
+            is_placeholder=False if img else True,
         )
         session.add(product)
         session.flush()

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ business.business_name }} | {{ business.tagline or 'Quality Service & Products' }}</title>
-  <meta name="description" content="{{ business.about_us or (business.business_name ~ ' - ' ~ business.category ~ '. Check our live catalog, services, and prices.') }}">
+  <title>Photo Test Bistro | Quality Service &amp; Products</title>
+  <meta name="description" content="Photo Test Bistro - Restaurant. Check our live catalog, services, and prices.">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -39,34 +39,24 @@
   <header class="bg-white/90 backdrop-blur-md sticky top-0 z-40 border-b border-stone-200/80 shadow-sm">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        {% if business.logo_url %}
-        <img src="{{ business.logo_url }}" alt="{{ business.business_name }} Logo" class="w-11 h-11 rounded-xl object-cover shadow-sm border border-stone-200/90 bg-white p-0.5">
-        {% else %}
+        
         <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-brand-600 to-amber-500 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-brand-500/20">
           🏪
         </div>
-        {% endif %}
+        
         <div>
           <h1 id="shop-title" class="text-xl sm:text-2xl font-extrabold tracking-tight text-stone-900">
-            {{ business.business_name }}
+            Photo Test Bistro
           </h1>
           <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-800">
-            {{ business.category }}
+            Restaurant
           </span>
         </div>
       </div>
       <div class="flex items-center space-x-2 sm:space-x-3">
-        {% if business.whatsapp %}
-        <a href="https://wa.me/{{ business.whatsapp|replace('+', '')|replace(' ', '') }}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold transition shadow-sm">
-          <span>💬 WhatsApp</span>
-        </a>
-        {% endif %}
+        
 
-        {% if business.phone %}
-        <a href="tel:{{ business.phone }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-xs sm:text-sm font-medium transition shadow-sm">
-          <span>📞 Call</span>
-        </a>
-        {% endif %}
+        
       </div>
     </div>
   </header>
@@ -76,87 +66,61 @@
     <div class="max-w-6xl mx-auto px-4 sm:px-6">
       
       <!-- Panoramic Hero Image Generated based on context & logo -->
-      {% if business.hero_image_url %}
+      
       <div class="mb-8 rounded-3xl overflow-hidden shadow-lg border border-stone-200/80 relative group">
         <img 
-          src="{{ business.hero_image_url }}" 
-          alt="{{ business.business_name }} Hero Banner" 
+          src="/static/images/heroes/photo-test-bistro_hero.jpg" 
+          alt="Photo Test Bistro Hero Banner" 
           class="w-full h-44 sm:h-64 md:h-72 object-cover group-hover:scale-101 transition-transform duration-500"
         >
       </div>
-      {% endif %}
+      
 
       <div class="text-center sm:text-left sm:flex sm:items-center sm:justify-between">
         <div class="space-y-4 max-w-2xl">
           <span class="px-3 py-1 rounded-full text-xs font-semibold tracking-wide bg-amber-100 text-amber-900 uppercase">
-            {{ business.category }}
+            Restaurant
           </span>
           <h2 class="text-3xl sm:text-4xl font-extrabold text-stone-900 tracking-tight leading-tight">
-            Welcome to <span class="text-brand-600">{{ business.business_name }}</span>
+            Welcome to <span class="text-brand-600">Photo Test Bistro</span>
           </h2>
-          {% if business.tagline %}
-          <p class="text-lg sm:text-xl font-medium text-stone-700 leading-snug">
-            “{{ business.tagline }}”
-          </p>
-          {% else %}
+          
           <p class="text-stone-600 text-base leading-relaxed">
             Discover our quality services and products crafted with care. Check out our real-time updated catalog below.
           </p>
-          {% endif %}
+          
 
           <!-- Call to Action Button -->
-          {% if business.cta_text %}
+          
           <div class="pt-2">
-            {% if business.whatsapp %}
-            <a href="https://wa.me/{{ business.whatsapp|replace('+', '')|replace(' ', '') }}?text=Hello%20{{ business.business_name }},%20I%20would%20like%20to%20inquire" target="_blank" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-500/30 transition transform hover:-translate-y-0.5">
-              <span>⚡ {{ business.cta_text }}</span>
-            </a>
-            {% elif business.phone %}
-            <a href="tel:{{ business.phone }}" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-500/30 transition transform hover:-translate-y-0.5">
-              <span>⚡ {{ business.cta_text }}</span>
-            </a>
-            {% else %}
+            
             <span class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 text-white font-bold text-sm shadow-md shadow-brand-500/30">
-              <span>⚡ {{ business.cta_text }}</span>
+              <span>⚡ Book Now</span>
             </span>
-            {% endif %}
+            
           </div>
-          {% endif %}
+          
 
           <div class="flex flex-wrap items-center justify-center sm:justify-start gap-4 pt-3 text-sm text-stone-500">
-            {% if business.opening_hours %}
-            <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-md border border-stone-200 shadow-xs">
-              <span>⏰</span>
-              <span>{{ business.opening_hours }}</span>
-            </div>
-            {% else %}
+            
             <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-md border border-stone-200 shadow-xs">
               <span>⏰</span>
               <span>Open Daily</span>
             </div>
-            {% endif %}
+            
 
-            {% if business.address %}
-            <div class="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-md border border-stone-200 shadow-xs">
-              <span>📍</span>
-              <span>{{ business.address }}</span>
-            </div>
-            {% endif %}
+            
           </div>
         </div>
 
         <div class="hidden sm:block">
           <div class="w-40 h-40 rounded-3xl bg-gradient-to-br from-amber-400 to-brand-600 p-1 shadow-lg transform rotate-2 hover:rotate-0 transition">
             <div class="w-full h-full bg-white rounded-2xl flex flex-col items-center justify-center p-3 text-center overflow-hidden">
-              {% if business.logo_url %}
-              <img src="{{ business.logo_url }}" alt="Logo" class="w-16 h-16 rounded-xl object-contain mb-1.5 shadow-xs">
-              <span class="text-xs font-bold text-stone-900 truncate w-full">{{ business.business_name }}</span>
-              <span class="text-[10px] text-emerald-600 font-semibold">✓ Official Store</span>
-              {% else %}
+              
               <span class="text-3xl">⭐</span>
               <span class="text-xs font-bold text-stone-800 mt-2">DukaanMitra</span>
               <span class="text-[10px] text-brand-600 font-semibold">Verified Storefront</span>
-              {% endif %}
+              
             </div>
           </div>
         </div>
@@ -165,35 +129,10 @@
   </section>
 
   <!-- Trust Badges Section -->
-  {% if business.trust_badges %}
-  <section class="bg-white border-b border-stone-200 py-6">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6">
-      <div class="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
-        {% for badge in business.trust_badges.split(',') %}
-        <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-stone-50 border border-stone-200/80 shadow-xs">
-          <span class="text-emerald-600 font-bold text-base">✓</span>
-          <span class="text-xs sm:text-sm font-semibold text-stone-800">{{ badge.strip() }}</span>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-  </section>
-  {% endif %}
+  
 
   <!-- About Us Section -->
-  {% if business.about_us %}
-  <section class="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-4 w-full">
-    <div class="bg-white rounded-2xl border border-stone-200/90 p-6 sm:p-8 shadow-xs">
-      <div class="flex items-center gap-3 mb-3">
-        <span class="text-2xl">📖</span>
-        <h3 class="text-xl font-bold text-stone-900">About Our Business</h3>
-      </div>
-      <p class="text-stone-600 text-sm sm:text-base leading-relaxed">
-        {{ business.about_us }}
-      </p>
-    </div>
-  </section>
-  {% endif %}
+  
 
   <!-- Key Services / Products Section -->
   <main class="flex-grow max-w-6xl mx-auto px-4 sm:px-6 py-10 w-full">
@@ -203,19 +142,19 @@
         <p class="text-sm text-stone-500">Quality offerings with transparent pricing</p>
       </div>
       <span class="text-xs font-medium px-3 py-1 rounded-full bg-stone-200 text-stone-700">
-        {{ products|length }} Items
+        2 Items
       </span>
     </div>
 
-    {% if products %}
+    
     <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-6">
-      {% for product in products %}
-      <div class="product-card group bg-white rounded-2xl border border-stone-200/90 shadow-sm hover:shadow-md hover:border-brand-500/50 transition-all duration-200 overflow-hidden flex flex-col" data-product-id="{{ product.product_id }}">
+      
+      <div class="product-card group bg-white rounded-2xl border border-stone-200/90 shadow-sm hover:shadow-md hover:border-brand-500/50 transition-all duration-200 overflow-hidden flex flex-col" data-product-id="1">
         <!-- Product Image -->
         <div class="w-full h-44 bg-brand-50 relative overflow-hidden flex items-center justify-center">
           <img 
-            src="{{ product.image_url or '/static/images/placeholder.svg' }}" 
-            alt="{{ product.name }}"
+            src="/static/images/products/tandoori.jpg" 
+            alt="Tandoori Chicken"
             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onerror="this.src='/static/images/placeholder.svg';"
           >
@@ -229,7 +168,7 @@
           <div>
             <div class="flex items-start justify-between gap-2">
               <h4 class="product-name font-bold text-stone-900 text-lg group-hover:text-brand-600 transition leading-snug">
-                {{ product.name }}
+                Tandoori Chicken
               </h4>
             </div>
             <p class="text-xs text-stone-500 mt-1">Available today with complete guarantee</p>
@@ -239,7 +178,7 @@
             <div>
               <span class="text-xs text-stone-400 block font-medium">Price</span>
               <span class="product-price text-xl font-extrabold text-stone-900 tracking-tight">
-                ₹{{ "%.0f"|format(product.price) if product.price.is_integer() else "%.2f"|format(product.price) }}
+                ₹320
               </span>
             </div>
             <span class="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 border border-brand-200/60">
@@ -248,24 +187,57 @@
           </div>
         </div>
       </div>
-      {% endfor %}
+      
+      <div class="product-card group bg-white rounded-2xl border border-stone-200/90 shadow-sm hover:shadow-md hover:border-brand-500/50 transition-all duration-200 overflow-hidden flex flex-col" data-product-id="2">
+        <!-- Product Image -->
+        <div class="w-full h-44 bg-brand-50 relative overflow-hidden flex items-center justify-center">
+          <img 
+            src="/static/images/placeholder.svg" 
+            alt="Butter Naan"
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onerror="this.src='/static/images/placeholder.svg';"
+          >
+          <div class="absolute top-3 right-3 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full text-xs font-bold text-stone-800 border border-stone-200 shadow-xs">
+            Featured
+          </div>
+        </div>
+
+        <!-- Product Content -->
+        <div class="p-5 flex flex-col flex-grow justify-between space-y-4">
+          <div>
+            <div class="flex items-start justify-between gap-2">
+              <h4 class="product-name font-bold text-stone-900 text-lg group-hover:text-brand-600 transition leading-snug">
+                Butter Naan
+              </h4>
+            </div>
+            <p class="text-xs text-stone-500 mt-1">Available today with complete guarantee</p>
+          </div>
+
+          <div class="pt-3 border-t border-stone-100 flex items-center justify-between">
+            <div>
+              <span class="text-xs text-stone-400 block font-medium">Price</span>
+              <span class="product-price text-xl font-extrabold text-stone-900 tracking-tight">
+                ₹40
+              </span>
+            </div>
+            <span class="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 border border-brand-200/60">
+              Available
+            </span>
+          </div>
+        </div>
+      </div>
+      
     </div>
-    {% else %}
-    <div class="text-center py-16 bg-white rounded-2xl border border-stone-200 p-8">
-      <div class="text-4xl mb-3">📋</div>
-      <h4 class="text-lg font-bold text-stone-800">No items listed yet</h4>
-      <p class="text-sm text-stone-500 mt-1">Send a message to add your services and products!</p>
-    </div>
-    {% endif %}
+    
   </main>
 
   <!-- Footer -->
   <footer class="bg-white border-t border-stone-200 py-8 mt-12 text-center text-xs text-stone-500">
     <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-      <p>© {{ business.business_name }}. All rights reserved.</p>
+      <p>© Photo Test Bistro. All rights reserved.</p>
       <div class="flex items-center gap-4">
-        {% if business.phone %}<a href="tel:{{ business.phone }}" class="hover:underline">Phone: {{ business.phone }}</a>{% endif %}
-        {% if business.whatsapp %}<a href="https://wa.me/{{ business.whatsapp|replace('+', '')|replace(' ', '') }}" class="hover:underline">WhatsApp</a>{% endif %}
+        
+        
       </div>
       <p class="flex items-center gap-1">
         Powered by <span class="font-bold text-brand-600">DukaanMitra AI</span> 🇮🇳

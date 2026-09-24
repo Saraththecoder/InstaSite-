@@ -1,6 +1,9 @@
 import os
+import re
+import uuid
 import tempfile
 import logging
+from typing import Optional, Any
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -13,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.config import require_telegram_token, STORE_BASE_URL
+from app.config import require_telegram_token, STORE_BASE_URL, BASE_DIR
 from app.db.database import SessionLocal, init_db
 from app.stt import transcribe_audio
 from app.extract import extract_business_from_transcript
@@ -27,11 +30,24 @@ from app.state_machine import (
     reject_change,
     undo_last_change,
 )
+from app.generator import slugify
+from app.hero_generator import generate_hero_banner, generate_brand_monogram
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+
+def sync_vercel_deployment() -> str | None:
+    """Deploys updated stores to Vercel if VERCEL_TOKEN is configured."""
+    try:
+        from deploy_vercel import deploy_to_vercel
+        return deploy_to_vercel()
+    except Exception as e:
+        logger.warning(f"Vercel auto-deploy skipped/failed: {e}")
+        return None
+
 
 # Conversation states for the step-by-step questionnaire
 (
@@ -45,8 +61,11 @@ logger = logging.getLogger(__name__)
     ASK_ADDRESS,
     ASK_HOURS,
     ASK_CTA,
-    ASK_SERVICES,
-) = range(11)
+    ASK_LOGO,
+    ASK_PROD_NAME,
+    ASK_PROD_PHOTO,
+    ASK_PROD_PRICE,
+) = range(14)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,23 +211,253 @@ async def ask_cta_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = update.message.text.strip()
     context.user_data["biz"]["cta_text"] = "Book Now" if txt.lower() == "skip" else txt
     await update.message.reply_text(
-        "1️⃣1️⃣ *Key Services or Products with prices?*\n"
-        "(e.g. `Oil Change 49, Brake Inspection 89, Full Detailing 149`)",
+        "1️⃣1️⃣ *Business Logo*\n\n"
+        "📸 Please upload or send your **Business Logo** image:\n"
+        "*(Or send /skip to automatically generate a branded monogram logo)*",
         parse_mode="Markdown"
     )
-    return ASK_SERVICES
+    return ASK_LOGO
 
 
-async def ask_services_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    txt = update.message.text.strip()
-    user_id = update.effective_user.id
+async def ask_logo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     biz_data = context.user_data.get("biz", {})
+    slug = slugify(biz_data.get("business_name", "shop"))
 
-    extracted = extract_business_from_transcript(f"{biz_data.get('business_name')}. {txt}")
-    products = [{"name": p.name, "price": p.price} for p in extracted.products]
+    logo_url = None
+    photo_file = None
+    if update.message.photo:
+        photo_file = update.message.photo[-1]
+    elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith("image/"):
+        photo_file = update.message.document
 
+    if photo_file:
+        try:
+            file_obj = await context.bot.get_file(photo_file.file_id)
+            img_dir = BASE_DIR / "static" / "images" / "logos"
+            img_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"{slug}_logo.jpg"
+            dest_path = img_dir / filename
+            await file_obj.download_to_drive(custom_path=str(dest_path))
+            logo_url = f"/static/images/logos/{filename}"
+            await update.message.reply_text("✅ Logo received!")
+        except Exception as e:
+            logger.error(f"Failed to download logo: {e}", exc_info=True)
+    elif update.message.text and update.message.text.strip().lower() in ["skip", "/skip", "no", "none"]:
+        return await skip_logo_handler(update, context)
+    else:
+        await update.message.reply_text(
+            "Please send an image photo for your logo, or type `/skip`.",
+            parse_mode="Markdown"
+        )
+        return ASK_LOGO
+
+    biz_data["logo_url"] = logo_url
+
+    # Generate custom hero banner based on context and logo!
+    try:
+        hero_dir = BASE_DIR / "static" / "images" / "heroes"
+        hero_dir.mkdir(parents=True, exist_ok=True)
+        hero_file = hero_dir / f"{slug}_hero.jpg"
+        local_logo = str(BASE_DIR / logo_url.lstrip("/")) if logo_url else None
+        generate_hero_banner(
+            business_name=biz_data.get("business_name", "My Store"),
+            category=biz_data.get("category", "Store"),
+            tagline=biz_data.get("tagline"),
+            logo_path=local_logo,
+            output_path=hero_file,
+        )
+        biz_data["hero_image_url"] = f"/static/images/heroes/{slug}_hero.jpg"
+
+        if hero_file.exists():
+            with open(hero_file, "rb") as hf:
+                await update.message.reply_photo(
+                    photo=hf,
+                    caption="🎨 *Custom AI Hero Banner Generated!* Crafted using your brand colors, logo & tagline.",
+                    parse_mode="Markdown"
+                )
+    except Exception as e:
+        logger.warning(f"Could not generate hero banner preview: {e}")
+
+    # Initialize products and prompt for product #1
+    biz_data["products"] = []
+    await update.message.reply_text(
+        "1️⃣2️⃣ *Key Services or Products*\n\n"
+        "Now let's add your products one by one.\n\n"
+        "📦 *Product #1*: What is the product / service name?\n"
+        "(e.g. `Chicken Biryani` or `Oil Change`)",
+        parse_mode="Markdown"
+    )
+    return ASK_PROD_NAME
+
+
+async def skip_logo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    biz_data = context.user_data.get("biz", {})
+    slug = slugify(biz_data.get("business_name", "shop"))
+
+    try:
+        logo_dir = BASE_DIR / "static" / "images" / "logos"
+        logo_dir.mkdir(parents=True, exist_ok=True)
+        logo_file = logo_dir / f"{slug}_logo.png"
+        generate_brand_monogram(
+            business_name=biz_data.get("business_name", "Shop"),
+            category=biz_data.get("category", "Store"),
+            output_path=logo_file,
+        )
+        biz_data["logo_url"] = f"/static/images/logos/{slug}_logo.png"
+
+        hero_dir = BASE_DIR / "static" / "images" / "heroes"
+        hero_dir.mkdir(parents=True, exist_ok=True)
+        hero_file = hero_dir / f"{slug}_hero.jpg"
+        generate_hero_banner(
+            business_name=biz_data.get("business_name", "My Store"),
+            category=biz_data.get("category", "Store"),
+            tagline=biz_data.get("tagline"),
+            logo_path=str(logo_file),
+            output_path=hero_file,
+        )
+        biz_data["hero_image_url"] = f"/static/images/heroes/{slug}_hero.jpg"
+
+        if hero_file.exists():
+            with open(hero_file, "rb") as hf:
+                await update.message.reply_photo(
+                    photo=hf,
+                    caption="✨ *Branded Monogram Logo & Custom Hero Banner Generated!*",
+                    parse_mode="Markdown"
+                )
+    except Exception as e:
+        logger.warning(f"Fallback monogram generation: {e}")
+
+    biz_data["products"] = []
+    await update.message.reply_text(
+        "1️⃣2️⃣ *Key Services or Products*\n\n"
+        "Now let's add your products one by one.\n\n"
+        "📦 *Product #1*: What is the product / service name?\n"
+        "(e.g. `Chicken Biryani` or `Oil Change`)",
+        parse_mode="Markdown"
+    )
+    return ASK_PROD_NAME
+
+
+async def ask_prod_name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    if txt.lower() in ["done", "/done", "finish", "finished", "no more", "stop", "exit"]:
+        return await finish_products_wizard(update, context)
+
+    context.user_data["current_prod"] = {
+        "name": txt,
+        "image_url": None,
+        "price": 0.0,
+    }
+
+    await update.message.reply_text(
+        f"📸 Please upload or send a **photo** for *{txt}*.\n\n"
+        "*(Or send /skip if you don't have a photo right now)*",
+        parse_mode="Markdown"
+    )
+    return ASK_PROD_PHOTO
+
+
+async def ask_prod_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    curr = context.user_data.get("current_prod", {})
+    prod_name = curr.get("name", "Product")
+
+    # Check if user sent text instead of photo
+    if update.message.text:
+        txt = update.message.text.strip().lower()
+        if txt in ["skip", "/skip", "no", "none", "na", "later"]:
+            return await skip_prod_photo_handler(update, context)
+        else:
+            await update.message.reply_text(
+                f"Please upload an image photo for *{prod_name}*, or send /skip to use the default photo.",
+                parse_mode="Markdown"
+            )
+            return ASK_PROD_PHOTO
+
+    # Handle image photo
+    photo_file = None
+    if update.message.photo:
+        photo_file = update.message.photo[-1]
+    elif update.message.document and update.message.document.mime_type and update.message.document.mime_type.startswith("image/"):
+        photo_file = update.message.document
+
+    if photo_file:
+        try:
+            file_obj = await context.bot.get_file(photo_file.file_id)
+            img_dir = BASE_DIR / "static" / "images" / "products"
+            img_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"prod_{uuid.uuid4().hex[:8]}.jpg"
+            dest_path = img_dir / filename
+            await file_obj.download_to_drive(custom_path=str(dest_path))
+            curr["image_url"] = f"/static/images/products/{filename}"
+            await update.message.reply_text(f"📸 Photo saved for *{prod_name}*!")
+        except Exception as e:
+            logger.error(f"Failed to download product photo: {e}", exc_info=True)
+            await update.message.reply_text("⚠️ Could not download photo, using default placeholder.")
+    else:
+        await update.message.reply_text(
+            f"Please send a photo for *{prod_name}*, or type /skip.",
+            parse_mode="Markdown"
+        )
+        return ASK_PROD_PHOTO
+
+    await update.message.reply_text(
+        f"💰 What is the **price** for *{prod_name}* in ₹?\n"
+        f"(e.g. `250` or `180`)",
+        parse_mode="Markdown"
+    )
+    return ASK_PROD_PRICE
+
+
+async def skip_prod_photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    curr = context.user_data.get("current_prod", {})
+    prod_name = curr.get("name", "Product")
+    curr["image_url"] = None
+    await update.message.reply_text(
+        f"Photo skipped for *{prod_name}*. (Default image will be used)\n\n"
+        f"💰 What is the **price** for *{prod_name}* in ₹?\n"
+        f"(e.g. `250` or `180`)",
+        parse_mode="Markdown"
+    )
+    return ASK_PROD_PRICE
+
+
+async def ask_prod_price_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    digits = re.findall(r"\d+(?:\.\d+)?", txt)
+    price = float(digits[0]) if digits else 0.0
+
+    curr = context.user_data.get("current_prod", {})
+    curr["price"] = price
+
+    context.user_data["biz"]["products"].append(curr)
+    prods = context.user_data["biz"]["products"]
+
+    photo_status = "📸 Photo added" if curr.get("image_url") else "🖼️ Default photo"
+    price_str = f"₹{int(price)}" if price.is_integer() else f"₹{price:.2f}"
+
+    await update.message.reply_text(
+        f"✅ *Added*: {curr['name']} — {price_str} ({photo_status})\n\n"
+        f"📦 *Product #{len(prods) + 1}*: Enter next product / service name:\n"
+        f"*(Or type `done` / send /done if you have finished adding products)*",
+        parse_mode="Markdown"
+    )
+    return ASK_PROD_NAME
+
+
+async def finish_products_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    biz_data = context.user_data.get("biz", {})
+    products = biz_data.get("products", [])
+
+    if not products:
+        await update.message.reply_text(
+            "⚠️ Please add at least 1 product or service before finishing.\n\n"
+            "📦 *Product #1*: Enter product name (e.g. `Chicken Biryani`):",
+            parse_mode="Markdown"
+        )
+        return ASK_PROD_NAME
+
+    user_id = update.effective_user.id
     biz_data["owner_telegram_id"] = user_id
-    biz_data["products"] = products
 
     # Propose change in changes table
     session = SessionLocal()
@@ -241,11 +490,16 @@ async def ask_services_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             card_lines.append(f"• *Hours*: {biz_data.get('opening_hours')}")
         if biz_data.get("trust_badges"):
             card_lines.append(f"• *Badges*: {biz_data.get('trust_badges')}")
+        if biz_data.get("logo_url"):
+            card_lines.append("• *Logo*: ✅ Configured")
+        if biz_data.get("hero_image_url"):
+            card_lines.append("• *Hero Section*: 🎨 AI Generated")
 
         card_lines.append("\n*Services / Products*:")
         for p in products:
             p_price = f"₹{int(p['price'])}" if float(p['price']).is_integer() else f"₹{p['price']:.2f}"
-            card_lines.append(f"  • {p['name']}: {p_price}")
+            icon = "📸" if p.get("image_url") else "🖼️"
+            card_lines.append(f"  • {icon} {p['name']}: {p_price}")
 
         card_lines.append("\n*Ready to publish your website?*")
 
@@ -286,7 +540,10 @@ async def undo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             full_url = f"{STORE_BASE_URL}{web_path}" if web_path else ""
             reply = f"✅ {msg}"
             if full_url:
-                reply += f"\n🌐 Live storefront: {full_url}"
+                reply += f"\n🌐 Local URL: {full_url}"
+            vercel_base = sync_vercel_deployment()
+            if vercel_base and web_path:
+                reply += f"\n☁️ Live Vercel: {vercel_base}{web_path}"
             await update.message.reply_text(reply)
         else:
             await update.message.reply_text(f"⚠️ {msg}")
@@ -326,14 +583,34 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles natural language text messages outside the wizard."""
-    text = update.message.text
+    """Handles natural language text or captioned photo messages outside the wizard."""
+    text = update.message.text or update.message.caption
     if not text:
         return
-    await process_utterance(update, context, text)
+
+    photo_url = None
+    if update.message.photo:
+        try:
+            photo_file = update.message.photo[-1]
+            file_obj = await context.bot.get_file(photo_file.file_id)
+            img_dir = BASE_DIR / "static" / "images" / "products"
+            img_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"prod_{uuid.uuid4().hex[:8]}.jpg"
+            dest_path = img_dir / filename
+            await file_obj.download_to_drive(custom_path=str(dest_path))
+            photo_url = f"/static/images/products/{filename}"
+        except Exception as e:
+            logger.warning(f"Could not save caption photo: {e}")
+
+    await process_utterance(update, context, text, photo_url=photo_url)
 
 
-async def process_utterance(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+async def process_utterance(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    photo_url: Optional[str] = None
+):
     """
     Core pipeline:
     Intent Routing -> Confidence Gate -> State Machine Proposal / Execution
@@ -373,7 +650,10 @@ async def process_utterance(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 full_url = f"{STORE_BASE_URL}{web_path}" if web_path else ""
                 reply = msg
                 if full_url:
-                    reply += f"\n🌐 Live storefront: {full_url}"
+                    reply += f"\n🌐 Local URL: {full_url}"
+                vercel_base = sync_vercel_deployment()
+                if vercel_base and web_path:
+                    reply += f"\n☁️ Live Vercel: {vercel_base}{web_path}"
                 await update.message.reply_text(reply)
             else:
                 await update.message.reply_text(f"⚠️ {msg}")
@@ -389,14 +669,18 @@ async def process_utterance(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 )
             else:
                 full_url = f"{STORE_BASE_URL}/store/{biz.slug}"
+                reply = f"🏪 *{biz.business_name}* is live!\n🌐 Local URL: {full_url}"
+                if os.getenv("VERCEL_TOKEN"):
+                    vercel_url = f"https://dukaanmitra-store-bcharishmareddy333-5668s-projects.vercel.app/store/{biz.slug}/"
+                    reply += f"\n☁️ Live Vercel: {vercel_url}"
                 await update.message.reply_text(
-                    f"🏪 *{biz.business_name}* is live!\n🌐 View Storefront: {full_url}",
+                    reply,
                     parse_mode="Markdown",
                 )
             return
 
         # 3. MUTATING INTENTS (CREATE_BUSINESS, ADD_PRODUCT, UPDATE_PRICE)
-        change, summary = propose_change(session, user_id, intent_result)
+        change, summary = propose_change(session, user_id, intent_result, image_url=photo_url)
         if not change:
             await update.message.reply_text(summary)
             return
@@ -432,13 +716,13 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             success, msg, web_path = confirm_change(session, change_id)
             if success:
                 full_url = f"{STORE_BASE_URL}{web_path}" if web_path else ""
-                if web_path and "Storefront created" in msg:
-                    await query.edit_message_text(f"{msg}\n🌐 View live storefront: {full_url}")
-                else:
-                    reply = msg
-                    if full_url:
-                        reply += f"\n🌐 Live storefront: {full_url}"
-                    await query.edit_message_text(reply)
+                reply = msg
+                if full_url:
+                    reply += f"\n🌐 Local URL: {full_url}"
+                vercel_base = sync_vercel_deployment()
+                if vercel_base and web_path:
+                    reply += f"\n☁️ Live Vercel: {vercel_base}{web_path}"
+                await query.edit_message_text(reply)
             else:
                 await query.edit_message_text(f"⚠️ {msg}")
 
@@ -475,7 +759,27 @@ def run_bot():
             ASK_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_address_handler)],
             ASK_HOURS: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_hours_handler)],
             ASK_CTA: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_cta_handler)],
-            ASK_SERVICES: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_services_handler)],
+            ASK_LOGO: [
+                CommandHandler("skip", skip_logo_handler),
+                MessageHandler(
+                    filters.PHOTO | filters.Document.IMAGE | (filters.TEXT & ~filters.COMMAND),
+                    ask_logo_handler,
+                ),
+            ],
+            ASK_PROD_NAME: [
+                CommandHandler("done", finish_products_wizard),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_prod_name_handler),
+            ],
+            ASK_PROD_PHOTO: [
+                CommandHandler("skip", skip_prod_photo_handler),
+                MessageHandler(
+                    filters.PHOTO | filters.Document.IMAGE | (filters.TEXT & ~filters.COMMAND),
+                    ask_prod_photo_handler,
+                ),
+            ],
+            ASK_PROD_PRICE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_prod_price_handler),
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel_wizard_handler)],
     )
@@ -484,7 +788,7 @@ def run_bot():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("undo", undo_command))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, handle_text_message))
     app.add_handler(CallbackQueryHandler(handle_callback_query))
 
     logger.info("DukaanMitra AI Telegram Bot is polling...")

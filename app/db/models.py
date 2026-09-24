@@ -39,6 +39,8 @@ class Business(Base):
     address = Column(String(500), nullable=True)
     opening_hours = Column(String(200), nullable=True)
     cta_text = Column(String(100), nullable=True, default="Book Now")
+    logo_url = Column(String(500), nullable=True)
+    hero_image_url = Column(String(500), nullable=True)
     slug = Column(String(255), nullable=False, unique=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(
