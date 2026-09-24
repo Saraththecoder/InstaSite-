@@ -763,7 +763,7 @@ def run_bot():
         entry_points=[
             CommandHandler("create", start_create_wizard),
             MessageHandler(
-                filters.Regex(r"^(?i)\s*(/?create|start\s*create|create\s*(a\s*)?(website|store|shop|business)?|new\s*(website|store|shop))\s*$"),
+                filters.Regex(r"(?i)^\s*(/?create|start\s*create|create\s*(a\s*)?(website|store|shop|business)?|new\s*(website|store|shop))\s*$"),
                 start_create_wizard,
             ),
             CallbackQueryHandler(start_create_wizard, pattern=r"^wizard:start$"),
